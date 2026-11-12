@@ -12,7 +12,8 @@ IODA Report Studio turns IODA's raw Internet-measurement data into **evidence-ta
 
 Every number in a brief is computed from IODA API v2 data. Every sentence carries an evidence tag. An LLM is used only to write prose from a fixed evidence packet, and its draft is audited claim by claim before a human sees it.
 
-- **Live demo (saved cases, Claude drafting):** https://claude.ai/artifact/Sz2gLaJrBrqQb1P3zF4oBA. Private until shared from its Share menu.
+- **Live dashboard (GitHub Pages, live IODA API):** https://arhilhorst.github.io/ioda-report-studio/. Anyone can open it. Audience prompts are copied into the model of your choice.
+- **Claude demo (saved cases, in-page Claude drafting):** https://claude.ai/artifact/Sz2gLaJrBrqQb1P3zF4oBA. Private until shared from its Share menu.
 - **Run locally (live IODA API):** `python3 -m http.server 8000`, then open http://localhost:8000.
 - **Presentation:** [docs/IODA-Report-Studio-presentation.pptx](docs/IODA-Report-Studio-presentation.pptx): 17 slides with speaker notes, following the rubric order.
 - **Development update:** [docs/IODA-Report-Studio-update.pptx](docs/IODA-Report-Studio-update.pptx): 14 slides on design choices, iterations and next improvements, with numbered sources.
@@ -254,7 +255,7 @@ Full detail: `data/validation/validation-report.md`.
 - **"Published" claims are taken from the Week 5 deck's citations** ([A1], [I1]); the IODA articles were not re-read for this release.
 - **"Visible by human" columns are detector proxies.** They are pre-filled and must be confirmed by a person.
 - **The IODA severity score covers the whole window**, not each candidate.
-- **The hosted demo cannot query the live API.** Live mode needs a local or static-host deployment.
+- **Live data and in-page Claude drafting are on different sites.** The GitHub Pages site queries the live IODA API but has no built-in Claude button (prompts are copied into any model). The claude.ai demo can call Claude but cannot reach the API, so it runs on saved cases.
 
 ---
 
@@ -265,7 +266,7 @@ Full detail: `data/validation/validation-report.md`.
 3. **Model controls** (Week 5 item): run `01_brief_writer.md` on identical packets across 3+ models and temperatures. Score drafts with the auditor and with a human fact-checker, and measure auditor agreement.
 4. **Reader testing**: 3–5 journalists review rule-based vs AI briefs. Record comprehension of "% of normal" vs "% of people".
 5. **Automatic outside corroboration**: Cloudflare Radar outage API (needs a token) as `E` sources, still labelled as automated.
-6. **Deploy live mode on GitHub Pages.** The site is static and the IODA API allows cross-origin calls, so it should run as-is.
+6. **GitHub Pages (done 12 Nov 2026):** live mode runs at https://arhilhorst.github.io/ioda-report-studio/. The next step is to watch IODA API load from public use; add caching or a request limit if needed.
 7. **IODA team review** of the classification rules, glitch threshold and prompt wording before any public use.
 8. **Newsroom watch mode**: scheduled CLI runs that post new corroborated candidates for a watch-list of countries.
 
