@@ -15,6 +15,7 @@ Every number in a brief is computed from IODA API v2 data. Every sentence carrie
 - **Live demo (saved cases, Claude drafting):** https://claude.ai/artifact/Sz2gLaJrBrqQb1P3zF4oBA. Private until shared from its Share menu.
 - **Run locally (live IODA API):** `python3 -m http.server 8000`, then open http://localhost:8000.
 - **Presentation:** [docs/IODA-Report-Studio-presentation.pptx](docs/IODA-Report-Studio-presentation.pptx): 17 slides with speaker notes, following the rubric order.
+- **Development update:** [docs/IODA-Report-Studio-update.pptx](docs/IODA-Report-Studio-update.pptx): 14 slides on design choices, iterations and next improvements, with numbered sources.
 
 ---
 
@@ -325,6 +326,7 @@ data/cases/*.json               saved results (real API pulls) used by the demo
 data/validation/validation-report.md         latest run (v0.1.1, 18/18)
 data/validation/validation-report-v0.1.0.md  first run (16/17), kept for the record
 docs/IODA-Report-Studio-presentation.pptx    17-slide research presentation (rubric order, speaker notes)
+docs/IODA-Report-Studio-update.pptx          14-slide development update (design choices, iterations, sources)
 ```
 
 ### Data formats
