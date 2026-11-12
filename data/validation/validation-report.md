@@ -1,6 +1,6 @@
 # Detector validation report
 
-Generated 2026-11-12T18:18:01.046Z by IODA Report Studio 0.1.1 against the live IODA API v2.
+Generated 2026-11-12T19:06:21.573Z by IODA Report Studio 0.2.0 against the live IODA API v2.
 
 **18 of 18 checks passed.**
 

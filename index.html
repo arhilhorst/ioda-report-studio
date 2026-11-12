@@ -199,6 +199,37 @@ details.edit summary { cursor: pointer; font-size: 13px; color: var(--ink-2); ma
 .kv div { padding: 6px 10px; border-bottom: 1px solid var(--line-2); min-width: 0; overflow-wrap: anywhere; }
 .kv div:nth-child(odd) { color: var(--ink-3); font-size: 12px; }
 .empty { color: var(--ink-3); font-size: 13px; padding: 12px 0; }
+
+/* Audience prompts */
+.lede { margin: 0 0 14px; max-width: 78ch; color: var(--ink-2); }
+.aud-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.aud-quick { font-size: 12px; color: var(--ink-3); }
+.aud-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.aud-card {
+  text-align: left; display: grid; gap: 6px; align-content: start; padding: 12px 12px 12px 40px; position: relative;
+  border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); cursor: pointer; min-width: 0;
+}
+.aud-card:hover { border-color: var(--ink-3); }
+.aud-card::before {
+  content: ""; position: absolute; left: 13px; top: 14px; width: 16px; height: 16px; border-radius: 4px;
+  border: 1.5px solid var(--ink-3); background: var(--panel);
+}
+.aud-card[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.aud-card[aria-pressed="true"]::before {
+  border-color: var(--accent); background: var(--accent)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat;
+}
+.aud-card strong { font-size: 14px; font-weight: 600; }
+.aud-card .sum { font-size: 12.5px; color: var(--ink-2); }
+.aud-card .meta { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 11.5px; color: var(--ink-3); }
+.aud-opts { display: flex; flex-wrap: wrap; gap: 0 12px; align-items: end; }
+.aud-opts .field { flex: 0 1 210px; min-width: 0; }
+.aud-opts .field.grow { flex: 1 1 280px; }
+.aud-opts .field[hidden] { display: none; }
+.copybar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 4px 0 12px; }
+.copybar .muted { font-size: 12.5px; }
+.btn.big { padding: 10px 18px; font-size: 14px; font-weight: 600; }
+.next-cta { justify-self: start; }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 4px; font-size: 13px; z-index: 20; }
 @media (prefers-reduced-motion: no-preference) { .toast { transition: opacity 0.2s; } }
 </style>
@@ -303,12 +334,12 @@ details.edit summary { cursor: pointer; font-size: 13px; color: var(--ink-2); ma
     <section class="panel" aria-labelledby="h-out">
       <h2 id="h-out" class="eyebrow" style="margin-bottom:10px">Outputs for <span id="out-focus">—</span></h2>
       <div class="tabs" role="tablist" id="tabs">
-        <button role="tab" id="tab-brief" aria-controls="p-brief" aria-selected="true">Brief draft</button>
-        <button role="tab" id="tab-ai" aria-controls="p-ai" aria-selected="false">AI draft</button>
-        <button role="tab" id="tab-audit" aria-controls="p-audit" aria-selected="false">Audit</button>
-        <button role="tab" id="tab-prompt" aria-controls="p-prompt" aria-selected="false">LLM prompt</button>
-        <button role="tab" id="tab-record" aria-controls="p-record" aria-selected="false">Documentation row</button>
-        <button role="tab" id="tab-packet" aria-controls="p-packet" aria-selected="false">Evidence packet</button>
+        <button role="tab" id="tab-brief" data-hash="brief" aria-controls="p-brief" aria-selected="true">Brief draft</button>
+        <button role="tab" id="tab-audience" data-hash="audience" aria-controls="p-audience" aria-selected="false">Audience prompts</button>
+        <button role="tab" id="tab-ai" data-hash="ai" aria-controls="p-ai" aria-selected="false">AI draft</button>
+        <button role="tab" id="tab-audit" data-hash="audit" aria-controls="p-audit" aria-selected="false">Audit</button>
+        <button role="tab" id="tab-record" data-hash="record" aria-controls="p-record" aria-selected="false">Documentation row</button>
+        <button role="tab" id="tab-packet" data-hash="packet" aria-controls="p-packet" aria-selected="false">Evidence packet</button>
       </div>
 
       <div role="tabpanel" id="p-brief" aria-labelledby="tab-brief">
@@ -323,14 +354,14 @@ details.edit summary { cursor: pointer; font-size: 13px; color: var(--ink-2); ma
       <div role="tabpanel" id="p-ai" aria-labelledby="tab-ai" hidden>
         <div id="ai-claude" hidden>
           <div class="toolbar">
-            <button class="btn primary" id="ai-run">Write the brief with Claude</button>
+            <button class="btn primary" id="ai-run">Write with Claude</button>
             <button class="btn" id="ai-stop" hidden>Stop</button>
-            <span class="muted grow" style="font-size:12.5px" id="ai-status">Sends the writer prompt and the evidence packet. Uses your Claude account and asks first.</span>
+            <span class="muted grow" style="font-size:12.5px" id="ai-status">Sends the prompt from the Audience prompts tab. Uses your Claude account and asks first.</span>
           </div>
         </div>
         <div id="ai-manual">
           <ol class="steps">
-            <li>Open the <b>LLM prompt</b> tab and copy the prompt.</li>
+            <li>Open the <b>Audience prompts</b> tab, pick the audiences and copy the prompt.</li>
             <li>Paste it into any chat model (Claude, ChatGPT, Gemini…) in a fresh conversation.</li>
             <li>Paste the model's answer below. The Audit tab will check it against the packet.</li>
           </ol>
@@ -356,17 +387,45 @@ details.edit summary { cursor: pointer; font-size: 13px; color: var(--ink-2); ma
         <div class="doc" id="audit-out"><div class="empty">No audit yet. Run one, or copy the audit prompt into a fresh chat with a different model.</div></div>
       </div>
 
-      <div role="tabpanel" id="p-prompt" aria-labelledby="tab-prompt" hidden>
-        <div class="field">
-          <label for="reviewer">Extra instructions for the model (optional)</label>
-          <input id="reviewer" placeholder="e.g. Write in Spanish. Keep it under 300 words.">
+      <div role="tabpanel" id="p-audience" aria-labelledby="tab-audience" hidden>
+        <p class="lede">Pick who the brief is for. The studio builds one prompt: IODA's evidence rules, each audience's format, and this drop's evidence packet. Paste it into Claude or any chat model.</p>
+        <div class="aud-head">
+          <span class="eyebrow">Audiences</span>
+          <span class="aud-quick"><button type="button" class="linkish" id="aud-all">Select all</button> · <button type="button" class="linkish" id="aud-one">Newsroom only</button></span>
         </div>
-        <div class="toolbar">
-          <span class="muted grow" style="font-size:12.5px" id="prompt-meta"></span>
-          <button class="btn small" data-copy="bundle">Copy prompt</button>
-          <button class="btn small" data-save="bundle">Download .md</button>
+        <div class="aud-grid" id="aud-grid" role="group" aria-label="Audiences for the brief"><div class="empty">Loading audience profiles…</div></div>
+        <div class="aud-opts">
+          <div class="field">
+            <label for="lang">Language of the brief</label>
+            <select id="lang">
+              <option>English</option><option>Arabic</option><option>Burmese</option><option>Chinese (Simplified)</option><option>French</option>
+              <option>Hindi</option><option>Persian (Farsi)</option><option>Portuguese</option><option>Russian</option><option>Spanish</option>
+              <option>Swahili</option><option>Turkish</option><option>Ukrainian</option><option>Urdu</option><option value="__other">Other…</option>
+            </select>
+          </div>
+          <div class="field" id="lang-other-wrap" hidden>
+            <label for="lang-other">Other language</label>
+            <input id="lang-other" placeholder="e.g. Amharic">
+          </div>
+          <div class="field grow">
+            <label for="reviewer">Extra instructions for the model (optional)</label>
+            <input id="reviewer" placeholder="e.g. Mention that the region is under curfew only if a source says so.">
+          </div>
         </div>
-        <pre class="box" id="bundle"></pre>
+        <div class="copybar">
+          <button type="button" class="btn primary big" id="copy-bundle" data-copy="bundle">Copy prompt</button>
+          <button type="button" class="btn" data-save="bundle">Download .md</button>
+          <span class="muted" id="prompt-meta"></span>
+        </div>
+        <ol class="steps">
+          <li>Paste the prompt into a <b>fresh</b> chat with Claude or any other model.</li>
+          <li>Copy the model's answer into the <b>AI draft</b> tab.</li>
+          <li>Run the <b>Audit</b>: it checks every claim against the packet and each audience's format and length.</li>
+        </ol>
+        <details class="edit">
+          <summary>Show the full prompt</summary>
+          <pre class="box" id="bundle"></pre>
+        </details>
       </div>
 
       <div role="tabpanel" id="p-record" aria-labelledby="tab-record" hidden>
@@ -417,7 +476,23 @@ details.edit summary { cursor: pointer; font-size: 13px; color: var(--ink-2); ma
     writer: null, auditor: null, notes: [], hidden: new Set(),
     sample: null, downloads: null, aiCtl: null, auditCtl: null,
     packet: null, draft: '', bundle: '', auditBundle: '', csv: '', ai: '', busy: false,
+    audiences: null, audSel: ['newsroom'], lang: 'English',
   };
+
+  /* Per-viewer conveniences only: remembered audience picks and language. */
+  const PREF_KEY = 'ioda-report-studio.prefs';
+  function loadPrefs() {
+    try {
+      const p = JSON.parse(localStorage.getItem(PREF_KEY) || '{}');
+      if (Array.isArray(p.aud) && p.aud.length) state.audSel = p.aud;
+      if (typeof p.lang === 'string') state.lang = p.lang;
+      if (typeof p.langOther === 'string') $('#lang-other').value = p.langOther;
+    } catch (e) { /* storage unavailable */ }
+  }
+  function savePrefs() {
+    try { localStorage.setItem(PREF_KEY, JSON.stringify({ aud: state.audSel, lang: state.lang, langOther: $('#lang-other').value })); }
+    catch (e) { /* storage unavailable */ }
+  }
 
   /* ---------------------------------------------------------- utilities */
   function toast(msg) {
@@ -515,6 +590,36 @@ details.edit summary { cursor: pointer; font-size: 13px; color: var(--ink-2); ma
     const get = async (p) => { const r = await fetch(p); if (!r.ok) throw new Error(r.status); return r.text(); };
     try { state.writer = await get('prompts/01_brief_writer.md'); } catch (e) { state.writer = null; }
     try { state.auditor = await get('prompts/02_claim_auditor.md'); } catch (e) { state.auditor = null; }
+    try { state.audiences = C.parseAudiences(await get('prompts/03_audiences.md')); } catch (e) { state.audiences = null; }
+    renderAudiences();
+  }
+
+  /* ----------------------------------------------------- audiences */
+  const TAG_WORDS = { inline: 'evidence tags in the text', trail: 'clean text + evidence table' };
+  const profileIndex = (id) => state.audiences.profiles.findIndex((p) => p.id === id);
+  function renderAudiences() {
+    const g = $('#aud-grid');
+    if (!state.audiences) {
+      g.innerHTML = '<div class="empty">The audience profiles (prompts/03_audiences.md) could not be loaded. Serve the folder over HTTP (python3 -m http.server).</div>';
+      return;
+    }
+    state.audSel = state.audSel.filter((id) => profileIndex(id) >= 0).sort((a, b) => profileIndex(a) - profileIndex(b));
+    if (!state.audSel.length) state.audSel = [state.audiences.profiles[0].id];
+    g.innerHTML = state.audiences.profiles.map((p) =>
+      `<button type="button" class="aud-card" data-aud="${esc(p.id)}" aria-pressed="${state.audSel.includes(p.id)}">` +
+      `<strong>${esc(p.label)}</strong><span class="sum">${esc(p.summary)}</span>` +
+      `<span class="meta"><span>${esc(p.length)}</span><span aria-hidden="true">·</span><span>${esc(TAG_WORDS[p.tags])}</span></span></button>`).join('');
+    $('#lang').value = state.lang;
+    $('#lang-other-wrap').hidden = state.lang !== '__other';
+  }
+  function audLabels() {
+    return state.audiences ? state.audSel.map((id) => state.audiences.profiles[profileIndex(id)].label) : ['Newsroom reporter'];
+  }
+  function currentLanguage() { return state.lang === '__other' ? ($('#lang-other').value.trim() || 'English') : state.lang; }
+  function selectTab(name) {
+    const b = $(`#tabs [data-hash="${name}"]`); if (!b) return false;
+    $$('#tabs [role="tab"]').forEach((t) => { const on = t === b; t.setAttribute('aria-selected', on); $('#' + t.getAttribute('aria-controls')).hidden = !on; });
+    return true;
   }
   async function bootCapabilities() {
     if (!(window.claude && window.claude.use)) return;
@@ -593,7 +698,8 @@ details.edit summary { cursor: pointer; font-size: 13px; color: var(--ink-2); ma
         ${r.severityScore ? `<span>IODA severity score ${Math.round(r.severityScore.overall).toLocaleString('en-US')} <span class="muted">(unitless)</span></span>` : ''}
         <a href="${esc(r.dashboardUrl)}" target="_blank" rel="noopener">Open in IODA dashboard ↗</a>
       </div>
-      <div class="verdicts">${pills}</div>${pub}`;
+      <div class="verdicts">${pills}</div>${pub}
+      ${state.focusId ? '<button type="button" class="btn primary next-cta" id="cta-aud">Write a brief for an audience →</button>' : ''}`;
   }
 
   function renderLegend() {
@@ -747,14 +853,25 @@ details.edit summary { cursor: pointer; font-size: 13px; color: var(--ink-2); ma
     state.packet = packet;
     state.draft = C.renderDraftBrief(r, state.focusId, notes);
     const extra = $('#reviewer').value;
-    state.bundle = state.writer ? C.buildPromptBundle(state.writer, packet, extra) : '';
-    state.auditBundle = state.auditor ? C.buildAuditBundle(state.auditor, packet, state.ai || state.draft) : '';
+    const lang = currentLanguage();
+    if (state.writer && state.audiences) {
+      state.bundle = C.buildAudienceBundle(state.writer, state.audiences, state.audSel, packet, { language: lang, extra });
+    } else {
+      state.bundle = state.writer ? C.buildPromptBundle(state.writer, packet, [lang !== 'English' ? `Write the brief in ${lang}.` : '', extra].filter(Boolean).join('\n')) : '';
+    }
+    // The AI draft is audited against its audience profiles; the rule-based draft is always Template F.
+    const profText = state.ai && state.audiences ? C.audienceProfilesText(state.audiences, state.audSel) : null;
+    state.auditBundle = state.auditor ? C.buildAuditBundle(state.auditor, packet, state.ai || state.draft, profText) : '';
+    const labels = audLabels();
+    const forWho = (labels.length === 1 ? labels[0] : `${labels.length} audiences`) + (lang !== 'English' ? ` · ${lang}` : '');
+    $('#copy-bundle').textContent = `Copy prompt · ${forWho}`;
+    $('#ai-run').textContent = `Write with Claude · ${forWho}`;
     state.csv = C.toCSV(r.candidates.map((c) => C.buildRecord(r, c.id)));
 
     $('#out-focus').textContent = state.focusId ? `${r.entity.name} · ${state.focusId}` : r.entity.name;
     renderMd($('#brief'), state.draft);
     $('#bundle').textContent = state.bundle || 'The prompt files could not be loaded. Serve the folder over HTTP (python3 -m http.server) so prompts/01_brief_writer.md can be read.';
-    $('#prompt-meta').textContent = state.bundle ? `prompts/01_brief_writer.md + evidence packet · ${state.bundle.length.toLocaleString('en-US')} characters (about ${Math.round(state.bundle.length / 4).toLocaleString('en-US')} tokens)` : '';
+    $('#prompt-meta').textContent = state.bundle ? `${labels.join(', ')} · ${state.bundle.length.toLocaleString('en-US')} characters, about ${Math.round(state.bundle.length / 4).toLocaleString('en-US')} tokens · packet ${packet.fingerprint || ''}` : '';
     $('#packet').textContent = JSON.stringify(packet, null, 2);
     $('#packet-meta').textContent = `ioda-evidence-packet/1 · fingerprint ${packet.fingerprint || 'n/a'} · ${packet.sources.length} sources`;
     const rec = state.focusId ? C.buildRecord(r, state.focusId) : null;
@@ -855,8 +972,41 @@ details.edit summary { cursor: pointer; font-size: 13px; color: var(--ink-2); ma
     $('#cands').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { const tr = ev.target.closest('[data-cand]'); if (tr) { ev.preventDefault(); focusOn(tr.dataset.cand); } } });
     $('#tabs').addEventListener('click', (ev) => {
       const b = ev.target.closest('[role="tab"]'); if (!b) return;
-      $$('#tabs [role="tab"]').forEach((t) => { const on = t === b; t.setAttribute('aria-selected', on); $('#' + t.getAttribute('aria-controls')).hidden = !on; });
+      selectTab(b.dataset.hash);
+      try { if (location.hash !== '#' + b.dataset.hash) location.hash = b.dataset.hash; } catch (e) { /* hash not writable here */ }
     });
+    window.addEventListener('hashchange', () => selectTab(location.hash.slice(1)));
+    document.addEventListener('click', (ev) => {
+      if (!ev.target.closest('#cta-aud')) return;
+      selectTab('audience');
+      try { location.hash = 'audience'; } catch (e) { /* ignore */ }
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      $('#h-out').closest('.panel').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    });
+    $('#aud-grid').addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-aud]'); if (!b || !state.audiences) return;
+      const id = b.dataset.aud;
+      if (state.audSel.includes(id)) {
+        if (state.audSel.length === 1) { toast('Keep at least one audience selected'); return; }
+        state.audSel = state.audSel.filter((x) => x !== id);
+      } else {
+        state.audSel = [...state.audSel, id].sort((a, c) => profileIndex(a) - profileIndex(c));
+      }
+      renderAudiences(); savePrefs(); renderOutputs();
+    });
+    $('#aud-all').addEventListener('click', () => {
+      if (!state.audiences) return;
+      state.audSel = state.audiences.profiles.map((p) => p.id);
+      renderAudiences(); savePrefs(); renderOutputs();
+    });
+    $('#aud-one').addEventListener('click', () => { state.audSel = ['newsroom']; renderAudiences(); savePrefs(); renderOutputs(); });
+    $('#lang').addEventListener('change', () => {
+      state.lang = $('#lang').value;
+      $('#lang-other-wrap').hidden = state.lang !== '__other';
+      if (state.lang === '__other') $('#lang-other').focus();
+      savePrefs(); renderOutputs();
+    });
+    $('#lang-other').addEventListener('input', () => { clearTimeout(noteTimer); noteTimer = setTimeout(() => { savePrefs(); renderOutputs(); }, 300); });
     document.addEventListener('click', (ev) => {
       const c = ev.target.closest('[data-copy]'); if (c) { if (c.dataset.copy === 'auditBundle' && !state.auditBundle) { toast('The auditor prompt is not loaded'); return; } copyText(outText[c.dataset.copy]()); return; }
       const s = ev.target.closest('[data-save]'); if (s) saveFile(s.dataset.save);
@@ -873,11 +1023,12 @@ details.edit summary { cursor: pointer; font-size: 13px; color: var(--ink-2); ma
   }
 
   async function init() {
-    renderMethod(); renderCases(); renderNotes(); setRange(7); renderMode(); bind();
+    loadPrefs(); renderMethod(); renderCases(); renderNotes(); setRange(7); renderMode(); bind();
     bootCapabilities();
     const [live] = await Promise.all([detectLive(), loadPrompts()]);
     state.mode = live ? 'live' : 'cases'; renderMode(); renderAiControls();
     await loadCase(CASES[0].id);
+    if (location.hash.length > 1) selectTab(location.hash.slice(1));
   }
   init();
 })();

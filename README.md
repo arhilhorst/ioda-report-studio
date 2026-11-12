@@ -1,7 +1,7 @@
 # IODA Report Studio
 
 **Georgia Tech VIP · IODA · Subteam 2 (AI-Assisted Documentation & Public Reporting)**
-Version 0.1.1 · 12 November 2026
+Version 0.2.0 · 12 November 2026 (0.2.0 adds audience prompts)
 
 IODA Report Studio turns IODA's raw Internet-measurement data into **evidence-tagged outage briefs for journalists**. It has four parts:
 
@@ -91,7 +91,8 @@ flowchart LR
 | Core library | `lib/ioda-core.js` | API client, signal analysis, outage detection, glitch check, evidence packet, Template F renderer, IODA documentation row, prompt bundling. No dependencies; runs in the browser and in Node 18+. |
 | Dashboard | `index.html` | Query any country, region or ASN; chart signals as % of normal; pick a drop; get the brief, LLM prompt, Claude draft, audit, CSV row and packet. Opens on saved cases when the live API is unreachable. |
 | Writer prompt | `prompts/01_brief_writer.md` | System prompt: packet → Template F brief with five evidence tags, 12 rules, good/bad examples, silent self-check. |
-| Auditor prompt | `prompts/02_claim_auditor.md` | Fact-checks a draft against the packet claim by claim; returns PASS / REVISE / BLOCK. |
+| Auditor prompt | `prompts/02_claim_auditor.md` | Fact-checks a draft against the packet claim by claim, including each audience's format and length; returns PASS / REVISE / BLOCK. |
+| Audience profiles | `prompts/03_audiences.md` | Six audiences (newsroom, breaking-news alert, fact-check desk, policy and human rights, general public and social, network operators). Each has its own format, length limit and evidence style. The dashboard's **Audience prompts** tab and `cli/report.mjs --audience` build ready-to-paste prompts from them. |
 | Report CLI | `cli/report.mjs` | One command → `result.json`, `packet.json`, `draft.md`, `prompt-bundle.md`, `record.csv`. |
 | Validation | `cli/validate.mjs`, `data/reference_cases.json` | Re-runs the pipeline on reference outages and checks it against what IODA published. Writes `data/validation/validation-report.md` and the saved cases in `data/cases/`. |
 
@@ -147,6 +148,19 @@ The auditor (`02_claim_auditor.md`) is adversarial by design:
 - it returns BLOCK on any WRONG or OVERSTATED claim.
 
 It should run in a fresh context, or on a different model from the writer.
+
+**Audience prompts (v0.2.0).** Different readers need different outputs from the same evidence. `prompts/03_audiences.md` holds six profiles:
+
+| Audience | Output | Limit | Evidence style |
+| --- | --- | --- | --- |
+| Newsroom reporter | Template F brief | 300–500 words | tags in the text |
+| Breaking-news alert | Headline and three sentences | ≤ 90 words | clean text + evidence table |
+| Editor / fact-check desk | Verdict, safe to say, not supported, verify next | ≤ 300 words | tags in the text |
+| Policy & human rights | Neutral key-facts table and suggested citation | ≤ 300 words | clean text + evidence table |
+| General public & social | Plain-language explainer and one social post | ≤ 120 words + 280 characters | clean text + evidence table |
+| Network operators & researchers | Per-signal measurements and open technical questions | ≤ 350 words | tags in the text |
+
+Every profile inherits all writer rules. Publishable formats keep the text clean and put the evidence tags in an **evidence trail** table after it, so the auditor can still check every claim. A shared rule ties wording to the classification for every audience: a likely glitch never becomes an alert, post or policy summary. Profiles are plain markdown between marker comments, so the team can edit them or add new ones without touching code.
 
 The dashboard always shows a **rule-based draft** next to the AI draft. That gives a no-LLM control for comparison, and a fallback if no model is available.
 
@@ -220,7 +234,7 @@ Full detail: `data/validation/validation-report.md`.
 1. Open the dashboard: hosted link above, or locally.
 2. Pick **Afghanistan**. The chart shows all signals collapsing on 29 Sep. The drops table shows C1 "Outage, 2+ signals" with IODA's own alerts.
 3. **Brief draft** tab: the rule-based Template F brief, every line tagged.
-4. **LLM prompt** tab: the writer prompt plus packet, ready for any model. In the hosted demo, **AI draft → Write the brief with Claude** streams a draft.
+4. **Audience prompts** tab (or the **Write a brief for an audience →** button): pick one or more audiences and a language, then **Copy prompt** and paste it into any model. In the hosted demo, **AI draft → Write with Claude** streams the draft for the chosen audiences.
 5. **Audit** tab: run the auditor on the AI draft and get PASS / REVISE / BLOCK with a claim table.
 6. **Outside sources**: add "Operator confirms…" with a link. It appears as `[CORROBORATED E1]` in the brief, packet and prompt.
 7. Pick **Ireland (control)** to show the glitch being caught, and **Guam** to show the × marker where the glitch reading was excluded.
@@ -285,6 +299,9 @@ node cli/validate.mjs IR-2026-01-08   # one case
 node cli/report.mjs --type country --code HT --from 2026-10-27T00:00Z --until 2026-10-29T12:00Z
 node cli/report.mjs --type asn --code 12066 --from 2026-11-09T00:00Z --until 2026-11-12T00:00Z --candidate C1
 #    -> out/<type>-<code>-<start>/{result.json, packet.json, draft.md, prompt-bundle.md, record.csv}
+node cli/report.mjs --type country --code HT --from 2026-10-27T00:00Z --until 2026-10-29T12:00Z --audience wire,public
+node cli/report.mjs --type country --code HT --from 2026-10-27T00:00Z --until 2026-10-29T12:00Z --audience all --language Spanish
+#    -> adds prompt-<audience ids>[-<language>].md, ready to paste into any LLM
 
 # 3. Run the dashboard with live data
 python3 -m http.server 8000           # or: npm run serve
@@ -299,7 +316,8 @@ To use an LLM without the dashboard, paste `out/.../prompt-bundle.md` into any c
 index.html                      dashboard
 lib/ioda-core.js                shared pipeline (browser + Node)
 prompts/01_brief_writer.md      LLM system prompt: packet -> Template F brief
-prompts/02_claim_auditor.md     LLM system prompt: draft + packet -> audit
+prompts/02_claim_auditor.md     LLM system prompt: draft + packet (+ audience profiles) -> audit
+prompts/03_audiences.md         audience profiles: format, length, evidence style per reader
 cli/report.mjs                  one-off report bundles
 cli/validate.mjs                validation suite
 data/reference_cases.json       reference outages, published claims, checks

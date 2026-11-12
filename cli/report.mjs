@@ -10,6 +10,11 @@
 //   draft.md            deterministic Template F brief (no LLM)
 //   prompt-bundle.md    prompts/01_brief_writer.md + packet, ready to paste into any LLM
 //   record.csv          one row in IODA's outage-documentation format per candidate
+//
+// Audience prompts (profiles in prompts/03_audiences.md):
+//   --audience wire,policy        one prompt for those audiences  -> prompt-wire+policy.md
+//   --audience all                one prompt per audience         -> prompt-<id>.md each
+//   --language Spanish            write the audience-facing text in that language
 import { createRequire } from 'node:module';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
@@ -29,7 +34,8 @@ function args(argv) {
 
 export const pickFocus = core.pickFocus;
 
-export async function writeBundle(result, outDir, focusId) {
+export async function writeBundle(result, outDir, focusId, opts) {
+  const o = opts || {};
   await mkdir(outDir, { recursive: true });
   const prompt = await readFile(join(ROOT, 'prompts/01_brief_writer.md'), 'utf8');
   const packet = core.buildPacket(result, focusId);
@@ -40,13 +46,29 @@ export async function writeBundle(result, outDir, focusId) {
   await writeFile(join(outDir, 'prompt-bundle.md'), core.buildPromptBundle(prompt, packet));
   const rows = result.candidates.map((c) => core.buildRecord(result, c.id));
   await writeFile(join(outDir, 'record.csv'), core.toCSV(rows));
-  return packet;
+
+  const written = [];
+  if (o.audience) {
+    const doc = core.parseAudiences(await readFile(join(ROOT, 'prompts/03_audiences.md'), 'utf8'));
+    const known = doc.profiles.map((p) => p.id);
+    const groups = o.audience === 'all'
+      ? known.map((id) => [id])
+      : [String(o.audience).split(',').map((s) => s.trim()).filter(Boolean)];
+    for (const ids of groups) {
+      const bad = ids.filter((id) => !known.includes(id));
+      if (bad.length) throw new Error(`Unknown audience "${bad.join(', ')}". Choose from: ${known.join(', ')}, or all.`);
+      const name = `prompt-${ids.join('+')}${o.language ? '-' + o.language.toLowerCase().replace(/[^a-z]+/g, '') : ''}.md`;
+      await writeFile(join(outDir, name), core.buildAudienceBundle(prompt, doc, ids, packet, { language: o.language }));
+      written.push(name);
+    }
+  }
+  return { packet, audiencePrompts: written };
 }
 
 async function main() {
   const a = args(process.argv.slice(2));
   if (!a.type || !a.code || !a.from || !a.until) {
-    console.error('Usage: node cli/report.mjs --type country|region|asn --code <code> --from <UTC> --until <UTC> [--candidate C1] [--out dir]');
+    console.error('Usage: node cli/report.mjs --type country|region|asn --code <code> --from <UTC> --until <UTC> [--candidate C1] [--audience ids|all] [--language <name>] [--out dir]');
     process.exit(2);
   }
   const result = await core.investigate(
@@ -56,7 +78,7 @@ async function main() {
   const focus = pickFocus(result, a.candidate);
   const tag = new Date(result.query.from * 1000).toISOString().slice(0, 16).replace(/[:]/g, '');
   const outDir = resolve(a.out || join(ROOT, 'out', `${a.type}-${result.entity.code}-${tag}`));
-  await writeBundle(result, outDir, focus && focus.id);
+  const { audiencePrompts } = await writeBundle(result, outDir, focus && focus.id, { audience: a.audience, language: a.language });
 
   console.log(`\n${result.entity.name} · ${core.fmtUTC(result.query.from)} → ${core.fmtUTC(result.query.until)}`);
   for (const c of result.candidates) {
@@ -65,6 +87,7 @@ async function main() {
   }
   if (!result.candidates.length) console.log('  No drops crossed the thresholds.');
   console.log(`\nFocus: ${focus ? focus.id : 'none'} · bundle written to ${outDir}`);
+  if (audiencePrompts.length) console.log(`Audience prompts: ${audiencePrompts.join(', ')}`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
