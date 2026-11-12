@@ -1,0 +1,84 @@
+{
+  "about": "Reference outages used to validate the detector against IODA's published analysis. 'published' holds what IODA reported, as cited in the Subteam 2 Week 5 deck (sources A1, I1) or in our Nov 12 2026 journalist brief. 'checks' are what the detector must reproduce from raw API data.",
+  "cases": [
+    {
+      "id": "AF-2025-09-29",
+      "title": "Afghanistan nationwide shutdown",
+      "entityType": "country", "entityCode": "AF",
+      "from": "2025-09-29T00:00Z", "until": "2025-10-02T00:00Z",
+      "published": [
+        { "claim": "First connectivity drop around 11:00 UTC on Sep 29", "source": "IODA Afghanistan report [A1]" },
+        { "claim": "Sustained nationwide drop around 12:30 UTC (article intro says 12:30 a.m.; later timeline says 12:30 PM UTC)", "source": "IODA Afghanistan report [A1]" },
+        { "claim": "Active Probing fell below 5%", "source": "IODA Afghanistan report [A1]" },
+        { "claim": "Traffic restored around 11:45 UTC on Oct 1", "source": "IODA / Cloudflare as cited in [A1]" }
+      ],
+      "checks": [
+        { "type": "classification", "expect": "corroborated" },
+        { "type": "signalsInclude", "expect": ["bgp", "ping-slash24"] },
+        { "type": "startBetween", "signal": "ping-slash24", "from": "2025-09-29T10:30Z", "until": "2025-09-29T13:30Z" },
+        { "type": "minBelowPct", "signal": "ping-slash24", "pct": 5 },
+        { "type": "recoveryNear", "signal": "ping-slash24", "at": "2025-10-01T11:45Z", "toleranceHours": 3 }
+      ]
+    },
+    {
+      "id": "IR-2026-01-08",
+      "title": "Iran international shutdown and staged recovery",
+      "entityType": "country", "entityCode": "IR",
+      "from": "2026-01-08T00:00Z", "until": "2026-01-30T00:00Z",
+      "published": [
+        { "claim": "Shutdown at 20:00 Iran time = 16:30 UTC on Jan 8", "source": "IODA comparative analysis [I1]" },
+        { "claim": "Active Probing later near 3%", "source": "IODA [I1]" },
+        { "claim": "Telescope near zero by 18:45 UTC Jan 8", "source": "IODA [I1]" },
+        { "claim": "Telescope shows renewed traffic Jan 24; Active Probing recovers sharply Jan 27", "source": "IODA [I1], updated page" }
+      ],
+      "checks": [
+        { "type": "classification", "expect": "corroborated" },
+        { "type": "startBetween", "signal": "ping-slash24", "from": "2026-01-08T15:30Z", "until": "2026-01-08T18:30Z" },
+        { "type": "minBelowPct", "signal": "ping-slash24", "pct": 6 },
+        { "type": "minBelowPct", "signal": "merit-nt", "pct": 15 },
+        { "type": "recoveryNear", "signal": "ping-slash24", "at": "2026-01-27T12:00Z", "toleranceHours": 36 }
+      ]
+    },
+    {
+      "id": "HT-2026-10-27",
+      "title": "Haiti multi-signal disruption",
+      "entityType": "country", "entityCode": "HT",
+      "from": "2026-10-27T00:00Z", "until": "2026-10-29T12:00Z",
+      "published": [
+        { "claim": "Google traffic fell for 12 h from 17:30 UTC Oct 27; BGP dropped for 21 h from 17:50 UTC", "source": "IODA events via our Nov 12 2026 journalist brief" }
+      ],
+      "checks": [
+        { "type": "classification", "expect": "corroborated" },
+        { "type": "signalsInclude", "expect": ["bgp"] },
+        { "type": "startBetween", "signal": "bgp", "from": "2026-10-27T16:30Z", "until": "2026-10-28T06:00Z" }
+      ]
+    },
+    {
+      "id": "GLITCH-2026-10-18",
+      "title": "Negative control: platform-wide probing glitch (189 countries at 00:00 UTC Oct 18)",
+      "entityType": "country", "entityCode": "IE",
+      "from": "2026-10-17T12:00Z", "until": "2026-10-18T12:00Z",
+      "published": [
+        { "claim": "189 countries showed a 1-hour probing event starting at the same minute", "source": "IODA events API, our Nov 12 2026 analysis" }
+      ],
+      "checks": [
+        { "type": "noRealOutage", "expect": "the glitch is flagged suspected-artifact and no candidate is presented as a corroborated outage" }
+      ]
+    },
+    {
+      "id": "GU-2026-10-17",
+      "title": "Exploratory: Guam probing-only disruption",
+      "entityType": "country", "entityCode": "GU",
+      "from": "2026-10-16T12:00Z", "until": "2026-10-21T12:00Z",
+      "published": [
+        { "claim": "Probing daily median fell to 51% on Oct 18 and 76% on Oct 19; routing unaffected", "source": "IODA raw signals via our Nov 12 2026 journalist brief" }
+      ],
+      "checks": [
+        { "type": "signalsInclude", "expect": ["ping-slash24"] },
+        { "type": "signalsExclude", "expect": ["bgp"] },
+        { "type": "minBelowPct", "signal": "ping-slash24", "pct": 60 },
+        { "type": "minNotNear", "signal": "ping-slash24", "at": "2026-10-18T00:30Z", "toleranceMinutes": 45 }
+      ]
+    }
+  ]
+}

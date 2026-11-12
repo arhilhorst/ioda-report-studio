@@ -1,0 +1,12 @@
+{
+  "name": "ioda-report-studio",
+  "version": "0.1.1",
+  "private": true,
+  "description": "Evidence-first outage briefs for journalists from IODA API data (Georgia Tech VIP IODA, Subteam 2).",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "serve": "python3 -m http.server 8000",
+    "validate": "node cli/validate.mjs",
+    "report": "node cli/report.mjs"
+  }
+}

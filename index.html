@@ -1,0 +1,886 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>IODA Report Studio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: an instrument rail (query, cases, outside sources, method) beside an evidence column
+   (verdict -> chart -> drops -> signals -> outputs). Stacks to one column under 960px. */
+:root {
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --sunk: #eef1f4;
+  --ink: #142231;
+  --ink-2: #485667;
+  --ink-3: #6f7b8a;
+  --line: #d9dfe6;
+  --line-2: #e8ecf0;
+  --accent: #1d4e89;
+  --accent-ink: #ffffff;
+  --accent-soft: #e3ecf7;
+  --s-bgp: #2a78d6;
+  --s-ap: #eb6834;
+  --s-tel: #1baf7a;
+  --s-gtr: #eda100;
+  --st-outage: #d03b3b;
+  --st-confirm: #fab219;
+  --st-glitch: #8a94a1;
+  --st-ok: #0ca30c;
+  --band: rgba(29, 78, 137, 0.07);
+  --band-sel: rgba(29, 78, 137, 0.16);
+  --f-display: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+  --f-body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141a; --panel: #161d25; --sunk: #1c242e; --ink: #e6ebf1; --ink-2: #aab5c2; --ink-3: #808c9a;
+    --line: #2b3542; --line-2: #222b36; --accent: #8db6ee; --accent-ink: #0c1828; --accent-soft: #1c2b3f;
+    --s-bgp: #3987e5; --s-ap: #d95926; --s-tel: #199e70; --s-gtr: #c98500;
+    --st-glitch: #77818e; --band: rgba(141, 182, 238, 0.07); --band-sel: rgba(141, 182, 238, 0.17);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f141a; --panel: #161d25; --sunk: #1c242e; --ink: #e6ebf1; --ink-2: #aab5c2; --ink-3: #808c9a;
+  --line: #2b3542; --line-2: #222b36; --accent: #8db6ee; --accent-ink: #0c1828; --accent-soft: #1c2b3f;
+  --s-bgp: #3987e5; --s-ap: #d95926; --s-tel: #199e70; --s-gtr: #c98500;
+  --st-glitch: #77818e; --band: rgba(141, 182, 238, 0.07); --band-sel: rgba(141, 182, 238, 0.17);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 14px/1.5 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 48px;
+}
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; color: var(--ink); }
+a { color: var(--accent); }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mono, code, pre { font-family: var(--f-mono); }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--ink-3); }
+.eyebrow { font: 600 11px/1.2 var(--f-display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+
+/* Top bar */
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding-block: 18px 16px; max-width: 1360px; margin: 0 auto; }
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand svg { flex: none; }
+.brand h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.brand p { margin: 0; color: var(--ink-3); font-size: 13px; }
+.top .spacer { flex: 1; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+.chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--st-glitch); }
+.chip[data-mode="live"] .dot { background: var(--st-ok); }
+.chip[data-mode="cases"] .dot { background: var(--st-confirm); }
+
+/* Shell */
+.shell { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; max-width: 1360px; margin: 0 auto; align-items: start; }
+@media (max-width: 960px) { .shell { grid-template-columns: minmax(0, 1fr); } }
+.rail { display: grid; gap: 14px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+@media (max-width: 960px) { .rail { position: static; } }
+.main { display: grid; gap: 16px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; min-width: 0; }
+.panel > h2 { font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); margin-bottom: 12px; }
+
+/* Forms */
+.field { display: grid; gap: 4px; margin-bottom: 10px; }
+.field label { font-size: 12px; color: var(--ink-2); font-weight: 500; }
+.field input, .field select, textarea {
+  width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); min-width: 0;
+}
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.quick { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 12px; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 12px;
+  border-radius: 4px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; font-size: 13px; font-weight: 500;
+}
+.btn:hover:not(:disabled) { border-color: var(--ink-3); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.small { padding: 3px 9px; font-size: 12px; }
+.btn.block { width: 100%; }
+.status { margin-top: 10px; font-size: 12px; color: var(--ink-2); min-height: 18px; }
+.status[data-kind="error"] { color: var(--st-outage); }
+.note { font-size: 12px; color: var(--ink-2); background: var(--sunk); border-radius: 4px; padding: 8px 10px; margin: 0 0 10px; }
+
+/* Case list */
+.cases { display: grid; gap: 6px; }
+.case-btn { text-align: left; display: grid; gap: 1px; padding: 8px 10px; border: 1px solid var(--line-2); border-radius: 4px; background: var(--panel); cursor: pointer; }
+.case-btn strong { font-weight: 600; font-size: 13px; }
+.case-btn span { font-size: 12px; color: var(--ink-3); }
+.case-btn[aria-current="true"] { border-color: var(--accent); background: var(--accent-soft); }
+
+/* Outside sources */
+.notes { display: grid; gap: 8px; }
+.note-row { display: grid; gap: 4px; padding: 8px; border: 1px solid var(--line-2); border-radius: 4px; }
+.note-row .head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--ink-3); }
+.linkish { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: 12px; }
+
+/* Method list */
+.method { margin: 0; padding-left: 16px; font-size: 12.5px; color: var(--ink-2); display: grid; gap: 6px; }
+
+/* Headline */
+.headline { display: grid; gap: 10px; }
+.headline .title-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.headline h2 { font-size: 26px; font-weight: 700; letter-spacing: -0.015em; }
+.meta { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; color: var(--ink-2); }
+.verdicts { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 7px; border-radius: 999px; border: 1px solid var(--line); font-size: 12px; font-weight: 500; white-space: nowrap; background: var(--panel); }
+.pill i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+.pill[data-c="corroborated"] i { background: var(--st-outage); }
+.pill[data-c="needs-confirmation"] i { background: var(--st-confirm); }
+.pill[data-c="suspected-artifact"] i { background: transparent; border: 2px solid var(--st-glitch); }
+.published { font-size: 13px; color: var(--ink-2); border-left: 3px solid var(--line); padding: 2px 0 2px 12px; }
+.published ul { margin: 4px 0 0; padding-left: 16px; }
+
+/* Chart */
+.chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 8px; }
+.chart-head h3 { font-size: 15px; font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px; }
+.legend button { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); font-size: 12px; cursor: pointer; }
+.legend button i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.legend button[aria-pressed="false"] { opacity: 0.45; }
+.legend button[aria-pressed="false"] i { background: var(--ink-3) !important; }
+#chart-host { position: relative; width: 100%; min-height: 240px; }
+#chart-host svg { display: block; overflow: visible; }
+#chart-host text { font-family: var(--f-body); }
+.tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.12); min-width: 170px; z-index: 2; }
+.tip .t { font-weight: 600; margin-bottom: 3px; }
+.tip .r { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
+.tip .r span:first-child { display: inline-flex; align-items: center; gap: 6px; }
+.tip i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+.caption { font-size: 12px; color: var(--ink-3); margin-top: 8px; }
+
+/* Tables */
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th { text-align: left; font-weight: 600; font-size: 11.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 8px 10px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+tbody tr.sel { background: var(--accent-soft); }
+tbody tr.pick { cursor: pointer; }
+tbody tr.pick:hover:not(.sel) { background: var(--sunk); }
+.sig { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.sig i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
+.sigchips { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.alerts { font-family: var(--f-mono); font-size: 12px; white-space: nowrap; }
+.alerts b { font-weight: 500; color: var(--ink); }
+.alerts s { text-decoration: none; color: var(--ink-3); }
+
+/* Outputs */
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); overflow-x: auto; margin: -4px -4px 14px; padding: 0 4px; }
+.tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; cursor: pointer; font-weight: 500; color: var(--ink-2); white-space: nowrap; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.toolbar .grow { flex: 1; }
+.doc { max-width: 78ch; font-size: 14px; }
+.doc h1 { font-size: 22px; margin: 4px 0 10px; }
+.doc h2 { font-size: 16px; margin: 22px 0 8px; }
+.doc table { margin: 8px 0; font-size: 12.5px; }
+.doc th { text-transform: none; letter-spacing: 0; font-size: 12px; }
+.doc td, .doc th { border: 1px solid var(--line-2); }
+.doc code { background: var(--sunk); padding: 1px 4px; border-radius: 3px; font-size: 12px; }
+.doc ul { padding-left: 20px; }
+.doc .table-wrap { margin: 8px 0; }
+pre.box { background: var(--sunk); border-radius: 4px; padding: 12px; overflow: auto; max-height: 520px; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; margin: 0; }
+textarea.draft { min-height: 220px; font-family: var(--f-mono); font-size: 12px; line-height: 1.5; resize: vertical; }
+.steps { margin: 0 0 12px; padding-left: 18px; font-size: 13px; color: var(--ink-2); display: grid; gap: 4px; }
+details.edit summary { cursor: pointer; font-size: 13px; color: var(--ink-2); margin: 10px 0 6px; }
+.kv { display: grid; grid-template-columns: minmax(140px, max-content) minmax(0, 1fr); gap: 0; font-size: 13px; }
+.kv div { padding: 6px 10px; border-bottom: 1px solid var(--line-2); min-width: 0; overflow-wrap: anywhere; }
+.kv div:nth-child(odd) { color: var(--ink-3); font-size: 12px; }
+.empty { color: var(--ink-3); font-size: 13px; padding: 12px 0; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 4px; font-size: 13px; z-index: 20; }
+@media (prefers-reduced-motion: no-preference) { .toast { transition: opacity 0.2s; } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+      <path d="M17 2 30 9.5v15L17 32 4 24.5v-15z" fill="none" stroke="var(--accent)" stroke-width="2.4"/>
+      <path d="M8 21h4l2.5-6 3 9 2.5-12 2.5 9H26" fill="none" stroke="var(--s-ap)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>
+    <div>
+      <h1>IODA Report Studio</h1>
+      <p>Evidence-first outage briefs for journalists, built from IODA's raw measurements</p>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <span class="chip" id="mode-chip" data-mode="checking"><span class="dot"></span><span id="mode-text">Checking the IODA API…</span></span>
+</header>
+
+<div class="shell">
+  <aside class="rail">
+    <section class="panel" aria-labelledby="h-inv">
+      <h2 id="h-inv">Investigate</h2>
+      <p class="note" id="live-note" hidden>This hosted copy cannot reach the IODA API: published pages may not call outside sites. Use the saved cases below, or run the studio on your computer to query any place (see the README).</p>
+      <form id="query-form" autocomplete="off">
+        <div class="field">
+          <label for="q-type">Look at</label>
+          <select id="q-type">
+            <option value="country">Country</option>
+            <option value="region">Region</option>
+            <option value="asn">Network (ASN)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="q-code">Code or name</label>
+          <input id="q-code" list="entity-options" placeholder="e.g. IR, Iran, 27653" required>
+          <datalist id="entity-options"></datalist>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="q-from">From (UTC)</label><input id="q-from" type="datetime-local" required></div>
+          <div class="field"><label for="q-until">Until (UTC)</label><input id="q-until" type="datetime-local" required></div>
+        </div>
+        <div class="quick" role="group" aria-label="Quick time ranges">
+          <button type="button" class="btn small" data-range="1">Last 24 h</button>
+          <button type="button" class="btn small" data-range="3">3 days</button>
+          <button type="button" class="btn small" data-range="7">7 days</button>
+          <button type="button" class="btn small" data-range="30">30 days</button>
+        </div>
+        <button type="submit" class="btn primary block" id="q-run">Analyse window</button>
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+      </form>
+    </section>
+
+    <section class="panel" aria-labelledby="h-cases">
+      <h2 id="h-cases">Saved cases</h2>
+      <div class="cases" id="cases"></div>
+      <div class="field" style="margin:10px 0 0">
+        <label for="file-in">Open a result file (result.json from the CLI)</label>
+        <input id="file-in" type="file" accept=".json,application/json">
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-notes">
+      <h2 id="h-notes">Outside sources</h2>
+      <p class="note">Add what a reporter confirmed elsewhere: an operator statement, Cloudflare Radar, local news. Each becomes <span class="mono">[CORROBORATED E1…]</span> evidence in the brief and the LLM packet.</p>
+      <div class="notes" id="notes"></div>
+      <button type="button" class="btn small" id="add-note" style="margin-top:8px">Add a source</button>
+    </section>
+
+    <section class="panel" aria-labelledby="h-method">
+      <h2 id="h-method">How drops are found</h2>
+      <ol class="method" id="method"></ol>
+    </section>
+  </aside>
+
+  <main class="main" id="main">
+    <section class="panel headline" id="headline" aria-live="polite">
+      <div class="empty">Loading a saved case…</div>
+    </section>
+
+    <section class="panel">
+      <div class="chart-head">
+        <h3 id="chart-title">Signals as % of their normal level</h3>
+        <div class="legend" id="legend" role="group" aria-label="Show or hide signals"></div>
+      </div>
+      <div id="chart-host"></div>
+      <div class="caption" id="chart-caption"></div>
+    </section>
+
+    <section class="panel">
+      <div class="chart-head"><h3>Drops found in this window</h3><span class="muted" style="font-size:12px">Pick one to write the brief about</span></div>
+      <div class="table-wrap" id="cands"></div>
+    </section>
+
+    <section class="panel">
+      <div class="chart-head"><h3>Signal evidence</h3></div>
+      <div class="table-wrap" id="signals"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-out">
+      <h2 id="h-out" class="eyebrow" style="margin-bottom:10px">Outputs for <span id="out-focus">—</span></h2>
+      <div class="tabs" role="tablist" id="tabs">
+        <button role="tab" id="tab-brief" aria-controls="p-brief" aria-selected="true">Brief draft</button>
+        <button role="tab" id="tab-ai" aria-controls="p-ai" aria-selected="false">AI draft</button>
+        <button role="tab" id="tab-audit" aria-controls="p-audit" aria-selected="false">Audit</button>
+        <button role="tab" id="tab-prompt" aria-controls="p-prompt" aria-selected="false">LLM prompt</button>
+        <button role="tab" id="tab-record" aria-controls="p-record" aria-selected="false">Documentation row</button>
+        <button role="tab" id="tab-packet" aria-controls="p-packet" aria-selected="false">Evidence packet</button>
+      </div>
+
+      <div role="tabpanel" id="p-brief" aria-labelledby="tab-brief">
+        <div class="toolbar">
+          <span class="muted grow" style="font-size:12.5px">Template F, written by rules from the evidence packet. No AI involved.</span>
+          <button class="btn small" data-copy="draft">Copy Markdown</button>
+          <button class="btn small" data-save="draft">Download .md</button>
+        </div>
+        <div class="doc" id="brief"></div>
+      </div>
+
+      <div role="tabpanel" id="p-ai" aria-labelledby="tab-ai" hidden>
+        <div id="ai-claude" hidden>
+          <div class="toolbar">
+            <button class="btn primary" id="ai-run">Write the brief with Claude</button>
+            <button class="btn" id="ai-stop" hidden>Stop</button>
+            <span class="muted grow" style="font-size:12.5px" id="ai-status">Sends the writer prompt and the evidence packet. Uses your Claude account and asks first.</span>
+          </div>
+        </div>
+        <div id="ai-manual">
+          <ol class="steps">
+            <li>Open the <b>LLM prompt</b> tab and copy the prompt.</li>
+            <li>Paste it into any chat model (Claude, ChatGPT, Gemini…) in a fresh conversation.</li>
+            <li>Paste the model's answer below. The Audit tab will check it against the packet.</li>
+          </ol>
+        </div>
+        <div class="doc" id="ai-preview"><div class="empty">No AI draft yet.</div></div>
+        <details class="edit" id="ai-edit">
+          <summary>Edit or paste the AI draft (Markdown)</summary>
+          <textarea class="draft" id="ai-text" aria-label="AI draft Markdown" placeholder="Paste the model's brief here"></textarea>
+        </details>
+        <div class="toolbar" style="margin-top:8px">
+          <button class="btn small" data-copy="ai">Copy AI draft</button>
+          <button class="btn small" data-save="ai">Download .md</button>
+        </div>
+      </div>
+
+      <div role="tabpanel" id="p-audit" aria-labelledby="tab-audit" hidden>
+        <div class="toolbar">
+          <button class="btn primary" id="audit-run" hidden>Audit with Claude</button>
+          <button class="btn" id="audit-stop" hidden>Stop</button>
+          <button class="btn small" data-copy="auditBundle">Copy audit prompt</button>
+          <span class="muted grow" style="font-size:12.5px" id="audit-status">Checks every claim in the AI draft (or the rule-based draft, if there is no AI draft) against the packet.</span>
+        </div>
+        <div class="doc" id="audit-out"><div class="empty">No audit yet. Run one, or copy the audit prompt into a fresh chat with a different model.</div></div>
+      </div>
+
+      <div role="tabpanel" id="p-prompt" aria-labelledby="tab-prompt" hidden>
+        <div class="field">
+          <label for="reviewer">Extra instructions for the model (optional)</label>
+          <input id="reviewer" placeholder="e.g. Write in Spanish. Keep it under 300 words.">
+        </div>
+        <div class="toolbar">
+          <span class="muted grow" style="font-size:12.5px" id="prompt-meta"></span>
+          <button class="btn small" data-copy="bundle">Copy prompt</button>
+          <button class="btn small" data-save="bundle">Download .md</button>
+        </div>
+        <pre class="box" id="bundle"></pre>
+      </div>
+
+      <div role="tabpanel" id="p-record" aria-labelledby="tab-record" hidden>
+        <div class="toolbar">
+          <span class="muted grow" style="font-size:12.5px">One row per drop, in the column order of IODA's outage documentation sheet. "Visible by human" is pre-filled by the detector: a person must confirm it.</span>
+          <button class="btn small" data-copy="csv">Copy CSV</button>
+          <button class="btn small" data-save="csv">Download .csv</button>
+        </div>
+        <div class="kv" id="record"></div>
+      </div>
+
+      <div role="tabpanel" id="p-packet" aria-labelledby="tab-packet" hidden>
+        <div class="toolbar">
+          <span class="muted grow" style="font-size:12.5px" id="packet-meta"></span>
+          <button class="btn small" data-copy="packet">Copy JSON</button>
+          <button class="btn small" data-save="packet">Download .json</button>
+        </div>
+        <pre class="box" id="packet"></pre>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script src="lib/ioda-core.js"></script>
+<script>
+(function () {
+  'use strict';
+  const C = window.IODACore;
+  const $ = (s, el) => (el || document).querySelector(s);
+  const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  // Same windows as data/reference_cases.json; `q` lets a live run rebuild a case when files can't be fetched.
+  const CASES = [
+    { id: 'AF-2025-09-29', name: 'Afghanistan', sub: '29 Sep 2025 · nationwide shutdown', q: ['country', 'AF', '2025-09-29T00:00Z', '2025-10-02T00:00Z'] },
+    { id: 'IR-2026-01-08', name: 'Iran', sub: '8–30 Jan 2026 · shutdown, staged recovery', q: ['country', 'IR', '2026-01-08T00:00Z', '2026-01-30T00:00Z'] },
+    { id: 'HT-2026-10-27', name: 'Haiti', sub: '27 Oct 2026 · three signals drop', q: ['country', 'HT', '2026-10-27T00:00Z', '2026-10-29T12:00Z'] },
+    { id: 'GU-2026-10-17', name: 'Guam', sub: '17–20 Oct 2026 · probing only, glitch inside', q: ['country', 'GU', '2026-10-16T12:00Z', '2026-10-21T12:00Z'] },
+    { id: 'GLITCH-2026-10-18', name: 'Ireland (control)', sub: '18 Oct 2026 · IODA-wide glitch', q: ['country', 'IE', '2026-10-17T12:00Z', '2026-10-18T12:00Z'], focusClass: 'suspected-artifact' },
+  ];
+  const SIG_VAR = { bgp: 'var(--s-bgp)', 'ping-slash24': 'var(--s-ap)', 'merit-nt': 'var(--s-tel)', gtr: 'var(--s-gtr)' };
+  const CLASS_SHORT = { 'corroborated': 'Outage, 2+ signals', 'needs-confirmation': 'Needs confirmation', 'suspected-artifact': 'Likely IODA glitch' };
+
+  const state = {
+    mode: 'checking', result: null, focusId: null, caseId: null,
+    writer: null, auditor: null, notes: [], hidden: new Set(),
+    sample: null, downloads: null, aiCtl: null, auditCtl: null,
+    packet: null, draft: '', bundle: '', auditBundle: '', csv: '', ai: '', busy: false,
+  };
+
+  /* ---------------------------------------------------------- utilities */
+  function toast(msg) {
+    const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; }, 1800); setTimeout(() => t.remove(), 2200);
+  }
+  function setStatus(msg, kind) { const s = $('#status'); s.textContent = msg || ''; s.dataset.kind = kind || ''; }
+  function renderMd(el, text) {
+    if (!text) { el.innerHTML = '<div class="empty">Nothing yet.</div>'; return; }
+    if (window.marked && window.DOMPurify) {
+      el.innerHTML = window.DOMPurify.sanitize(window.marked.parse(text, { gfm: true }));
+      $$('a', el).forEach((a) => { a.target = '_blank'; a.rel = 'noopener'; });
+      $$('table', el).forEach((t) => { const w = document.createElement('div'); w.className = 'table-wrap'; t.replaceWith(w); w.appendChild(t); });
+    } else {
+      el.innerHTML = `<pre class="box">${esc(text)}</pre>`;
+    }
+  }
+  const toLocalInput = (ts) => new Date(ts * 1000).toISOString().slice(0, 16);
+  const outText = { draft: () => state.draft, ai: () => state.ai, bundle: () => state.bundle, auditBundle: () => state.auditBundle, csv: () => state.csv, packet: () => JSON.stringify(state.packet, null, 2) };
+  function baseName() {
+    if (!state.result) return 'ioda';
+    const q = state.result.query;
+    return `ioda-${q.entityType}-${q.entityCode}-${new Date(q.from * 1000).toISOString().slice(0, 10)}${state.focusId ? '-' + state.focusId : ''}`;
+  }
+  const outFile = { draft: ['-brief.md', 'text/markdown'], ai: ['-ai-brief.md', 'text/markdown'], bundle: ['-prompt.md', 'text/markdown'], csv: ['-record.csv', 'text/csv'], packet: ['-packet.json', 'application/json'] };
+
+  async function copyText(text) {
+    if (!text) { toast('Nothing to copy yet'); return; }
+    try { await navigator.clipboard.writeText(text); toast('Copied'); }
+    catch (e) {
+      const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+      let ok = false; try { ok = document.execCommand('copy'); } catch (e2) { /* ignore */ }
+      ta.remove(); toast(ok ? 'Copied' : 'Copy was blocked here. Select the text and copy it by hand.');
+    }
+  }
+  const canSave = () => !window.claude || !!state.downloads;
+  async function saveFile(key) {
+    const text = outText[key](); if (!text) { toast('Nothing to save yet'); return; }
+    const [suffix, type] = outFile[key]; const name = baseName() + suffix;
+    if (state.downloads) {
+      try { await state.downloads.save({ filename: name, data: text }); }
+      catch (e) { if (e && e.code !== 'declined') toast(`Could not save the file (${e.code || e.message}). Use Copy instead.`); }
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+  }
+
+  /* ------------------------------------------------------------- setup */
+  function renderMethod() {
+    const D = C.DEFAULTS, S = C.SIGNALS;
+    $('#method').innerHTML = [
+      `"Normal" for each signal is its median over the ${D.baselineDays} days before the window. Google traffic uses IODA's own forecast instead, which models daily cycles.`,
+      `A reading counts as a drop when it is both ${S.bgp.k}×MAD below normal and at least this far under it: BGP ${S.bgp.minDrop * 100}%, probing ${S['ping-slash24'].minDrop * 100}%, telescope ${S['merit-nt'].minDrop * 100}%. Google: below IODA's forecast threshold and ${S.gtr.minDrop * 100}% under forecast.`,
+      `Drops shorter than ${D.minSegmentMinutes} min are ignored. Drops within ${D.mergeToleranceMinutes} min of each other count as simultaneous.`,
+      `<b>Outage</b>: 2+ signals drop together and one of them is BGP or probing (IODA's rule, tightened after a false alarm in testing).`,
+      `<b>Likely IODA glitch</b>: ${D.artifactCountryThreshold}+ other countries show the same drop within ±${D.artifactWindowMinutes} min.`,
+      `Validated on 5 reference cases, 18/18 checks (data/validation).`,
+    ].map((t) => `<li>${t}</li>`).join('');
+  }
+  function renderCases() {
+    $('#cases').innerHTML = CASES.map((c) => `<button type="button" class="case-btn" data-case="${c.id}" aria-current="${state.caseId === c.id}"><strong>${esc(c.name)}</strong><span>${esc(c.sub)}</span></button>`).join('');
+  }
+  function renderNotes() {
+    $('#notes').innerHTML = state.notes.map((n, i) => `
+      <div class="note-row">
+        <div class="head"><span class="mono">E${i + 1}</span><button type="button" class="linkish" data-del-note="${i}">Remove</button></div>
+        <input aria-label="What the source says (E${i + 1})" data-note="${i}" data-k="text" value="${esc(n.text)}" placeholder="What it says, e.g. Operator blames a fibre cut">
+        <input aria-label="Source link (E${i + 1})" data-note="${i}" data-k="url" value="${esc(n.url)}" placeholder="https://…">
+      </div>`).join('') || '<div class="muted" style="font-size:12px">None added.</div>';
+  }
+  function renderMode() {
+    const chip = $('#mode-chip'); chip.dataset.mode = state.mode;
+    $('#mode-text').textContent = state.mode === 'live' ? 'Live IODA API' : state.mode === 'cases' ? 'Saved cases only' : 'Checking the IODA API…';
+    const off = state.mode !== 'live';
+    $('#live-note').hidden = state.mode !== 'cases';
+    $$('#query-form input, #query-form select, #query-form button').forEach((el) => { el.disabled = off || state.busy; });
+  }
+  function setRange(days) {
+    const until = Math.floor(Date.now() / 1000 / 600) * 600; const from = until - days * 86400;
+    $('#q-from').value = toLocalInput(from); $('#q-until').value = toLocalInput(until);
+  }
+  function fillForm(q) {
+    $('#q-type').value = q.entityType; $('#q-code').value = q.entityCode;
+    $('#q-from').value = toLocalInput(q.from); $('#q-until').value = toLocalInput(q.until);
+  }
+
+  async function detectLive() {
+    const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 6000);
+    try { const r = await fetch(C.API + '/datasources/', { signal: ctl.signal }); return r.ok; }
+    catch (e) { return false; } finally { clearTimeout(timer); }
+  }
+  async function loadPrompts() {
+    const get = async (p) => { const r = await fetch(p); if (!r.ok) throw new Error(r.status); return r.text(); };
+    try { state.writer = await get('prompts/01_brief_writer.md'); } catch (e) { state.writer = null; }
+    try { state.auditor = await get('prompts/02_claim_auditor.md'); } catch (e) { state.auditor = null; }
+  }
+  async function bootCapabilities() {
+    if (!(window.claude && window.claude.use)) return;
+    try { state.sample = await window.claude.use('sample'); } catch (e) { state.sample = null; }
+    try { state.downloads = await window.claude.use('downloads'); } catch (e) { state.downloads = null; }
+    renderAiControls();
+  }
+  function renderAiControls() {
+    const has = !!state.sample;
+    $('#ai-claude').hidden = !has; $('#audit-run').hidden = !has;
+    $('#ai-manual').querySelector('li:first-child').innerHTML = has
+      ? 'Or copy the prompt from the <b>LLM prompt</b> tab to compare models.'
+      : 'Open the <b>LLM prompt</b> tab and copy the prompt.';
+    $$('[data-save]').forEach((b) => { b.hidden = !canSave(); });
+  }
+
+  /* --------------------------------------------------- loading results */
+  async function loadCase(id) {
+    state.caseId = id; renderCases();
+    setStatus(`Opening saved case ${id}…`);
+    try {
+      const r = await fetch(`data/cases/${id}.json`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const result = await r.json();
+      setResult(result); fillForm(result.query);
+      const hint = (CASES.find((c) => c.id === id) || {}).focusClass;
+      const hinted = hint && result.candidates.find((c) => c.classification === hint);
+      if (hinted) focusOn(hinted.id);
+      setStatus(`Saved case from ${result.generatedAt.slice(0, 10)}. Real IODA data, analysed by ${result.generator}.`);
+    } catch (e) {
+      if (state.mode === 'live') {
+        const ref = (CASES.find((c) => c.id === id) || CASES[0]).q;
+        setStatus('Saved case files need a local web server. Running the case live instead…');
+        await runLive({ entityType: ref[0], entityCode: ref[1], from: ref[2], until: ref[3] });
+      } else {
+        setStatus('Could not open the saved case. If you opened index.html straight from disk, start a local server (python3 -m http.server) and open http://localhost:8000.', 'error');
+      }
+    }
+  }
+  async function runLive(params) {
+    if (state.busy) return;
+    state.busy = true; renderMode();
+    try {
+      const result = await C.investigate(params, { onProgress: (m) => setStatus(m + '…') });
+      state.caseId = null; renderCases();
+      setResult(result); fillForm(result.query);
+      setStatus(`Done: ${result.candidates.length} drop${result.candidates.length === 1 ? '' : 's'} found, ${result.requests.length} API calls.`);
+    } catch (e) {
+      setStatus(e.message, 'error');
+    } finally { state.busy = false; renderMode(); }
+  }
+  function setResult(result) {
+    state.result = result;
+    const f = C.pickFocus(result); state.focusId = f ? f.id : null;
+    state.ai = ''; $('#ai-text').value = ''; renderMd($('#ai-preview'), '');
+    $('#audit-out').innerHTML = '<div class="empty">No audit yet.</div>';
+    renderAll();
+  }
+
+  /* ----------------------------------------------------------- render */
+  function renderAll() { renderHeadline(); renderLegend(); renderChart(); renderCandidates(); renderSignals(); renderOutputs(); }
+
+  function renderHeadline() {
+    const r = state.result; const q = r.query; const e = r.entity;
+    const kind = { country: 'Country', region: 'Region', asn: 'Network' }[q.entityType];
+    const org = e.attrs && e.attrs.org ? ` · ${esc(e.attrs.org)}` : '';
+    const pills = r.candidates.length
+      ? r.candidates.map((c) => `<span class="pill" data-c="${c.classification}"><i></i>${c.id} · ${esc(CLASS_SHORT[c.classification])}</span>`).join('')
+      : '<span class="pill"><i style="background:var(--st-ok)"></i>No drops crossed the thresholds</span>';
+    const pub = r.caseInfo && r.caseInfo.published ? `<div class="published"><span class="eyebrow">What IODA published about this case</span><ul>${r.caseInfo.published.map((p) => `<li>${esc(p.claim)} <span class="muted">(${esc(p.source)})</span></li>`).join('')}</ul></div>` : '';
+    $('#headline').innerHTML = `
+      <span class="eyebrow">${kind}${r.country && q.entityType !== 'country' ? ' in ' + esc(r.country.name) : ''}</span>
+      <div class="title-row"><h2>${esc(e.name)}</h2><span class="muted mono">${esc(q.entityType)}/${esc(q.entityCode)}${org}</span></div>
+      <div class="meta num">
+        <span>${C.fmtUTC(q.from)} → ${C.fmtUTC(q.until)}</span>
+        ${r.severityScore ? `<span>IODA severity score ${Math.round(r.severityScore.overall).toLocaleString('en-US')} <span class="muted">(unitless)</span></span>` : ''}
+        <a href="${esc(r.dashboardUrl)}" target="_blank" rel="noopener">Open in IODA dashboard ↗</a>
+      </div>
+      <div class="verdicts">${pills}</div>${pub}`;
+  }
+
+  function renderLegend() {
+    const r = state.result;
+    $('#legend').innerHTML = r.signals.filter((s) => s.status === 'ok').map((s) =>
+      `<button type="button" data-sig="${s.ds}" aria-pressed="${!state.hidden.has(s.ds)}"><i style="background:${SIG_VAR[s.ds]}"></i>${esc(C.SIGNALS[s.ds].short)}</button>`).join('');
+  }
+
+  function niceStep(span, px) {
+    const H = 3600, steps = [H, 3 * H, 6 * H, 12 * H, 24 * H, 48 * H, 7 * 24 * H];
+    const maxTicks = Math.max(2, Math.floor(px / 92));
+    return steps.find((s) => span / s <= maxTicks) || steps[steps.length - 1];
+  }
+  function tickLabel(t, step) {
+    const d = new Date(t * 1000);
+    const day = `${d.getUTCDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()]}`;
+    if (step >= 86400 || (d.getUTCHours() === 0 && d.getUTCMinutes() === 0)) return day;
+    return `${String(d.getUTCHours()).padStart(2, '0')}:00`;
+  }
+
+  function renderChart() {
+    const r = state.result; const host = $('#chart-host');
+    if (!r) { host.innerHTML = ''; return; }
+    const W = Math.max(300, Math.floor(host.clientWidth)); const narrow = W < 600;
+    const H = narrow ? 250 : 310;
+    const m = { l: 44, r: narrow ? 10 : 96, t: 24, b: 30 };
+    const x0 = r.query.from, x1 = r.query.until, yMax = 1.25;
+    const pw = W - m.l - m.r, ph = H - m.t - m.b;
+    const X = (t) => m.l + ((t - x0) / (x1 - x0)) * pw;
+    const Y = (v) => m.t + (1 - Math.max(0, Math.min(v, yMax)) / yMax) * ph;
+    const sigs = r.signals.filter((s) => s.status === 'ok');
+    const shown = sigs.filter((s) => !state.hidden.has(s.ds));
+    let clipped = false;
+    let svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="IODA signals for ${esc(r.entity.name)} as a percentage of their normal level, ${esc(C.fmtUTC(x0))} to ${esc(C.fmtUTC(x1))}">`;
+    svg += `<defs><clipPath id="plot"><rect x="${m.l}" y="${m.t - 2}" width="${pw}" height="${ph + 4}"/></clipPath></defs>`;
+    // candidate bands
+    for (const c of r.candidates) {
+      const a = Math.max(m.l, X(c.begin)), b = Math.min(m.l + pw, X(c.end)); const w = Math.max(2, b - a);
+      const sel = c.id === state.focusId;
+      svg += `<g class="band" data-cand="${c.id}" style="cursor:pointer"><rect x="${a}" y="${m.t}" width="${w}" height="${ph}" fill="${sel ? 'var(--band-sel)' : 'var(--band)'}"/>`;
+      svg += `<text x="${a + 3}" y="${m.t - 8}" font-size="11" font-weight="${sel ? 600 : 400}" fill="${sel ? 'var(--ink)' : 'var(--ink-3)'}">${c.id}</text><title>${c.id}: ${esc(CLASS_SHORT[c.classification])}, ${esc(C.fmtUTC(c.begin))}, ${esc(C.fmtDuration(c.duration))}</title></g>`;
+    }
+    // grid
+    for (const v of [0, 0.25, 0.5, 0.75, 1]) {
+      const y = Y(v);
+      svg += `<line x1="${m.l}" x2="${m.l + pw}" y1="${y}" y2="${y}" stroke="${v === 1 ? 'var(--ink-3)' : 'var(--line-2)'}" stroke-width="1" ${v === 1 ? 'stroke-dasharray="4 4"' : ''}/>`;
+      svg += `<text x="${m.l - 8}" y="${y + 4}" font-size="11" text-anchor="end" fill="var(--ink-3)">${v * 100}%</text>`;
+    }
+    svg += `<text x="${m.l + 4}" y="${Y(1) - 5}" font-size="11" fill="var(--ink-3)">normal</text>`;
+    // x ticks
+    const step = niceStep(x1 - x0, pw);
+    for (let t = Math.ceil(x0 / step) * step; t <= x1; t += step) {
+      const x = X(t);
+      svg += `<line x1="${x}" x2="${x}" y1="${m.t + ph}" y2="${m.t + ph + 4}" stroke="var(--ink-3)"/><text x="${x}" y="${H - 8}" font-size="11" text-anchor="middle" fill="var(--ink-3)">${tickLabel(t, step)}</text>`;
+    }
+    svg += `<line x1="${m.l}" x2="${m.l + pw}" y1="${m.t + ph}" y2="${m.t + ph}" stroke="var(--ink-3)"/>`;
+    // lines
+    svg += '<g clip-path="url(#plot)">';
+    const ends = [];
+    for (const s of shown) {
+      let d = '', prev = null;
+      for (const p of s.ratios) {
+        if (p.r == null) { prev = null; continue; }
+        if (p.r > yMax) clipped = true;
+        const cmd = prev != null && p.t - prev <= s.step * 2.5 ? 'L' : 'M';
+        d += `${cmd}${X(p.t).toFixed(1)},${Y(p.r).toFixed(1)}`; prev = p.t;
+      }
+      svg += `<path d="${d}" fill="none" stroke="${SIG_VAR[s.ds]}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+      const last = s.ratios.filter((p) => p.r != null).at(-1); if (last) ends.push({ ds: s.ds, y: Y(last.r), r: last.r });
+    }
+    // glitch-excluded readings
+    for (const c of r.candidates) for (const s of c.signals) if (s.minGlitch && !state.hidden.has(s.ds)) {
+      const x = X(s.minGlitch.at), y = Y(s.minGlitch.rawMinRatio);
+      svg += `<g><path d="M${x - 4},${y - 4}L${x + 4},${y + 4}M${x - 4},${y + 4}L${x + 4},${y - 4}" stroke="var(--ink-2)" stroke-width="2"/><title>Excluded: ${Math.round(s.minGlitch.rawMinRatio * 100)}% at ${esc(C.fmtUTC(s.minGlitch.at))}, when ${s.minGlitch.countries} other countries dropped at once (IODA glitch)</title></g>`;
+    }
+    svg += '</g>';
+    // direct labels at line ends
+    if (!narrow) {
+      ends.sort((a, b) => a.y - b.y);
+      for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 14) ends[i].y = ends[i - 1].y + 14;
+      for (const e of ends) svg += `<text x="${m.l + pw + 8}" y="${Math.min(H - m.b, e.y) + 4}" font-size="11.5" fill="var(--ink-2)">${esc(C.SIGNALS[e.ds].short)} ${Math.round(e.r * 100)}%</text>`;
+    }
+    svg += `<line id="xhair" x1="0" x2="0" y1="${m.t}" y2="${m.t + ph}" stroke="var(--ink-3)" stroke-width="1" visibility="hidden"/>`;
+    svg += `<rect id="hover" x="${m.l}" y="${m.t}" width="${pw}" height="${ph}" fill="transparent"/>`;
+    svg += '</svg>';
+    host.innerHTML = svg + '<div class="tip" id="tip" hidden></div>';
+    $('#chart-caption').textContent = `Each line is a signal divided by its normal level (Google traffic: by IODA's forecast). Shaded bands are drops the detector found; click one to focus it.${clipped ? ' Readings above 125% are cut off at the top.' : ''} × marks a reading excluded as an IODA-wide glitch. Times UTC.`;
+    $('#chart-title').textContent = `${r.entity.name}: signals as % of their normal level`;
+
+    const hover = $('#hover'), tip = $('#tip'), xh = $('#xhair');
+    const nearest = (arr, t) => { let lo = 0, hi = arr.length - 1; while (lo < hi) { const mid = (lo + hi) >> 1; if (arr[mid].t < t) lo = mid + 1; else hi = mid; } const a = arr[Math.max(0, lo - 1)], b = arr[lo]; return !a ? b : !b ? a : Math.abs(a.t - t) <= Math.abs(b.t - t) ? a : b; };
+    hover.addEventListener('pointermove', (ev) => {
+      const box = host.getBoundingClientRect(); const px = ev.clientX - box.left;
+      const t = x0 + ((px - m.l) / pw) * (x1 - x0);
+      const rows = shown.map((s) => { const p = nearest(s.ratios, t); return p && Math.abs(p.t - t) <= s.step * 1.5 && p.r != null ? `<div class="r"><span><i style="background:${SIG_VAR[s.ds]}"></i>${esc(C.SIGNALS[s.ds].short)}</span><span class="num">${Math.round(p.r * 100)}%</span></div>` : ''; }).join('');
+      xh.setAttribute('x1', px); xh.setAttribute('x2', px); xh.setAttribute('visibility', 'visible');
+      tip.innerHTML = `<div class="t num">${esc(C.fmtUTC(Math.round(t / 300) * 300))}</div>${rows || '<div class="muted">No data</div>'}`;
+      tip.hidden = false;
+      const tw = tip.offsetWidth; tip.style.left = `${Math.min(px + 14, box.width - tw - 4)}px`; tip.style.top = `${m.t + 4}px`;
+    });
+    hover.addEventListener('pointerleave', () => { tip.hidden = true; xh.setAttribute('visibility', 'hidden'); });
+    hover.addEventListener('click', (ev) => {
+      const box = host.getBoundingClientRect(); const t = x0 + ((ev.clientX - box.left - m.l) / pw) * (x1 - x0);
+      const c = r.candidates.find((cd) => t >= cd.begin && t <= cd.end); if (c) focusOn(c.id);
+    });
+  }
+
+  function alertsCell(c) {
+    return C.CORE_SIGNALS.map((ds) => { const v = c.iodaAlerts[ds]; const k = C.SIGNALS[ds].tag; return v === true ? `<b>${k}✓</b>` : v === 'NA' ? '' : `<s>${k}·</s>`; }).filter(Boolean).join(' ');
+  }
+  function renderCandidates() {
+    const r = state.result;
+    if (!r.candidates.length) { $('#cands').innerHTML = '<div class="empty">No signal fell below its drop threshold in this window. Check the IODA chart by eye before concluding nothing happened.</div>'; return; }
+    const rows = r.candidates.map((c) => `
+      <tr class="pick ${c.id === state.focusId ? 'sel' : ''}" data-cand="${c.id}" tabindex="0" aria-selected="${c.id === state.focusId}">
+        <td class="mono">${c.id}</td>
+        <td><span class="pill" data-c="${c.classification}"><i></i>${esc(CLASS_SHORT[c.classification])}</span></td>
+        <td class="num">${esc(C.fmtUTC(c.begin))}</td>
+        <td class="num">${esc(C.fmtDuration(c.duration))}${c.ongoing ? ' <span class="muted">(ongoing)</span>' : ''}</td>
+        <td><div class="sigchips">${c.signals.map((s) => `<span class="sig"><i style="background:${SIG_VAR[s.ds]}"></i>${esc(C.SIGNALS[s.ds].short)} <span class="num">${Math.round(s.minRatio * 100)}%</span>${s.minGlitch ? '<span class="muted" title="A lower glitch reading was excluded">*</span>' : ''}</span>`).join('')}</div></td>
+        <td class="alerts">${alertsCell(c)}</td>
+        <td class="num">${c.artifact.checked ? `${c.artifact.maxSimultaneousCountries} ${c.artifact.maxSimultaneousCountries === 1 ? 'country' : 'countries'}` : '<span class="muted">not checked</span>'}</td>
+      </tr>`).join('');
+    $('#cands').innerHTML = `<table><thead><tr><th>ID</th><th>Verdict</th><th>Starts</th><th>Lasts</th><th>Lowest level per signal</th><th>IODA alerts</th><th>Same drop elsewhere</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  function fmtVal(v) { return v == null ? 'n/a' : v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e4 ? Math.round(v).toLocaleString('en-US') : (Math.round(v * 10) / 10).toLocaleString('en-US'); }
+  function renderSignals() {
+    const r = state.result;
+    const rows = r.signals.map((s) => {
+      const m = C.SIGNALS[s.ds];
+      if (s.status !== 'ok') return `<tr><td><span class="sig"><i style="background:${SIG_VAR[s.ds]}"></i>${esc(m.label)}</span></td><td colspan="4" class="muted">${esc(s.note)}</td></tr>`;
+      const normal = s.ds === 'gtr' && s.method && s.method.includes('forecast') ? 'IODA forecast' : `${fmtVal(s.baseline.median)} <span class="muted">${esc(m.unit)}</span>`;
+      return `<tr>
+        <td><span class="sig"><i style="background:${SIG_VAR[s.ds]}"></i>${esc(m.label)}</span></td>
+        <td class="num">${normal}</td>
+        <td class="num">${s.window.min ? `${Math.round(s.window.min.r * 100)}% <span class="muted">at ${esc(C.fmtUTC(s.window.min.t))}</span>` : 'n/a'}</td>
+        <td class="num">${Math.round(s.window.latest.r * 100)}%</td>
+        <td>${esc(m.mustNot)}</td>
+      </tr>`;
+    }).join('');
+    $('#signals').innerHTML = `<table><thead><tr><th>Signal</th><th>Normal level</th><th>Lowest in window</th><th>At window end</th><th>Must not be read as</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="caption">"Lowest in window" is the raw minimum, before glitch exclusion. The brief quotes per-drop lowest points from the table above.</p>`;
+  }
+
+  async function renderOutputs() {
+    const r = state.result; if (!r) return;
+    const notes = { external: state.notes.filter((n) => n.text.trim()) };
+    const packet = C.buildPacket(r, state.focusId, notes);
+    packet.fingerprint = await C.fingerprint(packet);
+    state.packet = packet;
+    state.draft = C.renderDraftBrief(r, state.focusId, notes);
+    const extra = $('#reviewer').value;
+    state.bundle = state.writer ? C.buildPromptBundle(state.writer, packet, extra) : '';
+    state.auditBundle = state.auditor ? C.buildAuditBundle(state.auditor, packet, state.ai || state.draft) : '';
+    state.csv = C.toCSV(r.candidates.map((c) => C.buildRecord(r, c.id)));
+
+    $('#out-focus').textContent = state.focusId ? `${r.entity.name} · ${state.focusId}` : r.entity.name;
+    renderMd($('#brief'), state.draft);
+    $('#bundle').textContent = state.bundle || 'The prompt files could not be loaded. Serve the folder over HTTP (python3 -m http.server) so prompts/01_brief_writer.md can be read.';
+    $('#prompt-meta').textContent = state.bundle ? `prompts/01_brief_writer.md + evidence packet · ${state.bundle.length.toLocaleString('en-US')} characters (about ${Math.round(state.bundle.length / 4).toLocaleString('en-US')} tokens)` : '';
+    $('#packet').textContent = JSON.stringify(packet, null, 2);
+    $('#packet-meta').textContent = `ioda-evidence-packet/1 · fingerprint ${packet.fingerprint || 'n/a'} · ${packet.sources.length} sources`;
+    const rec = state.focusId ? C.buildRecord(r, state.focusId) : null;
+    $('#record').innerHTML = rec ? C.RECORD_COLUMNS.map((k) => `<div>${esc(k)}</div><div class="${/time|score/i.test(k) ? 'num' : ''}">${/URL/.test(k) && rec[k] ? `<a href="${esc(rec[k])}" target="_blank" rel="noopener">${esc(rec[k])}</a>` : esc(rec[k]) || '<span class="muted">to fill in</span>'}</div>`).join('') : '<div class="empty">No drop selected.</div>';
+  }
+
+  function focusOn(id) {
+    if (state.focusId === id) return;
+    state.focusId = id; state.ai = ''; $('#ai-text').value = ''; renderMd($('#ai-preview'), '');
+    $('#audit-out').innerHTML = '<div class="empty">No audit yet.</div>';
+    renderChart(); renderCandidates(); renderOutputs();
+  }
+
+  /* ------------------------------------------------------------ Claude */
+  const SAMPLE_ERR = {
+    not_granted: 'Claude access was declined for this page. Copy the prompt into any LLM instead.',
+    rate_limited: 'Too many requests right now. Wait a minute, then try again.',
+    cancelled: 'Stopped.',
+    prompt_too_large: 'The prompt is too long. Pick a shorter window or fewer outside sources.',
+    refused: 'Claude declined this request.',
+  };
+  async function runSample(input, { onText, statusEl, runBtn, stopBtn, ctlKey }) {
+    if (!state.sample) return null;
+    const ctl = new AbortController(); state[ctlKey] = ctl;
+    runBtn.disabled = true; stopBtn.hidden = false; statusEl.textContent = 'Thinking… (long prompts can take a minute)';
+    try {
+      const res = await state.sample(input, { modelTier: 'default', signal: ctl.signal, onText: ({ text }) => { statusEl.textContent = 'Writing…'; onText(text); } });
+      statusEl.textContent = res.truncated ? 'Done, but the answer was cut short.' : `Done (${res.modelTierApplied || 'default'} model). Check it before using it.`;
+      return res.text;
+    } catch (e) {
+      statusEl.textContent = SAMPLE_ERR[e.code] || `Claude could not answer (${e.code || e.message}).`;
+      return e.text || null;
+    } finally { runBtn.disabled = false; stopBtn.hidden = true; state[ctlKey] = null; }
+  }
+  let mdTimer = null;
+  function throttledMd(el, text) { if (mdTimer) return; mdTimer = setTimeout(() => { mdTimer = null; renderMd(el, text); }, 250); }
+
+  async function runAi() {
+    if (!state.bundle) { toast('The writer prompt is not loaded'); return; }
+    const text = await runSample(state.bundle, {
+      onText: (t) => { state.ai = t; $('#ai-text').value = t; throttledMd($('#ai-preview'), t); },
+      statusEl: $('#ai-status'), runBtn: $('#ai-run'), stopBtn: $('#ai-stop'), ctlKey: 'aiCtl',
+    });
+    if (text) { state.ai = text; $('#ai-text').value = text; renderMd($('#ai-preview'), text); renderOutputs(); }
+  }
+  async function runAudit() {
+    if (!state.auditor) { toast('The auditor prompt is not loaded'); return; }
+    await renderOutputs();
+    const text = await runSample(state.auditBundle, {
+      onText: (t) => throttledMd($('#audit-out'), t),
+      statusEl: $('#audit-status'), runBtn: $('#audit-run'), stopBtn: $('#audit-stop'), ctlKey: 'auditCtl',
+    });
+    if (text) renderMd($('#audit-out'), text);
+  }
+
+  /* ------------------------------------------------------------ events */
+  function bind() {
+    $('#query-form').addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      runLive({ entityType: $('#q-type').value, entityCode: $('#q-code').value.trim(), from: $('#q-from').value, until: $('#q-until').value });
+    });
+    $$('[data-range]').forEach((b) => b.addEventListener('click', () => setRange(Number(b.dataset.range))));
+    let searchTimer = null;
+    $('#q-code').addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      const v = $('#q-code').value.trim(); if (state.mode !== 'live' || v.length < 2 || /^\d+$/.test(v)) return;
+      searchTimer = setTimeout(async () => {
+        try {
+          const { data } = await C.makeClient().searchEntities(v, $('#q-type').value, 12);
+          $('#entity-options').innerHTML = (data || []).map((e) => `<option value="${esc(e.code)}">${esc(C.cleanName(e.name))}</option>`).join('');
+        } catch (e) { /* suggestions are optional */ }
+      }, 300);
+    });
+    $('#cases').addEventListener('click', (ev) => { const b = ev.target.closest('[data-case]'); if (b) loadCase(b.dataset.case); });
+    $('#file-in').addEventListener('change', async (ev) => {
+      const f = ev.target.files[0]; if (!f) return;
+      try {
+        const json = JSON.parse(await f.text());
+        if (!json || !Array.isArray(json.candidates) || !json.signals) throw new Error('not a Report Studio result file');
+        state.caseId = null; renderCases(); setResult(json); fillForm(json.query); setStatus(`Opened ${f.name}.`);
+      } catch (e) { setStatus(`Could not open ${f.name}: ${e.message}. Use a result.json written by cli/report.mjs.`, 'error'); }
+    });
+    $('#add-note').addEventListener('click', () => { state.notes.push({ text: '', url: '' }); renderNotes(); $$('#notes input')[state.notes.length * 2 - 2].focus(); });
+    let noteTimer = null;
+    $('#notes').addEventListener('input', (ev) => {
+      const i = ev.target.dataset.note; if (i == null) return;
+      state.notes[i][ev.target.dataset.k] = ev.target.value;
+      clearTimeout(noteTimer); noteTimer = setTimeout(renderOutputs, 300);
+    });
+    $('#notes').addEventListener('click', (ev) => { const i = ev.target.dataset.delNote; if (i == null) return; state.notes.splice(Number(i), 1); renderNotes(); renderOutputs(); });
+    $('#legend').addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-sig]'); if (!b) return;
+      const ds = b.dataset.sig; state.hidden.has(ds) ? state.hidden.delete(ds) : state.hidden.add(ds);
+      renderLegend(); renderChart();
+    });
+    $('#chart-host').addEventListener('click', (ev) => { const g = ev.target.closest('[data-cand]'); if (g) focusOn(g.dataset.cand); });
+    $('#cands').addEventListener('click', (ev) => { const tr = ev.target.closest('[data-cand]'); if (tr) focusOn(tr.dataset.cand); });
+    $('#cands').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { const tr = ev.target.closest('[data-cand]'); if (tr) { ev.preventDefault(); focusOn(tr.dataset.cand); } } });
+    $('#tabs').addEventListener('click', (ev) => {
+      const b = ev.target.closest('[role="tab"]'); if (!b) return;
+      $$('#tabs [role="tab"]').forEach((t) => { const on = t === b; t.setAttribute('aria-selected', on); $('#' + t.getAttribute('aria-controls')).hidden = !on; });
+    });
+    document.addEventListener('click', (ev) => {
+      const c = ev.target.closest('[data-copy]'); if (c) { if (c.dataset.copy === 'auditBundle' && !state.auditBundle) { toast('The auditor prompt is not loaded'); return; } copyText(outText[c.dataset.copy]()); return; }
+      const s = ev.target.closest('[data-save]'); if (s) saveFile(s.dataset.save);
+    });
+    $('#ai-text').addEventListener('input', () => { state.ai = $('#ai-text').value; throttledMd($('#ai-preview'), state.ai); });
+    $('#ai-text').addEventListener('change', renderOutputs);
+    $('#reviewer').addEventListener('input', () => { clearTimeout(noteTimer); noteTimer = setTimeout(renderOutputs, 300); });
+    $('#ai-run').addEventListener('click', runAi);
+    $('#ai-stop').addEventListener('click', () => state.aiCtl && state.aiCtl.abort());
+    $('#audit-run').addEventListener('click', runAudit);
+    $('#audit-stop').addEventListener('click', () => state.auditCtl && state.auditCtl.abort());
+    let rz = null;
+    new ResizeObserver(() => { cancelAnimationFrame(rz); rz = requestAnimationFrame(() => state.result && renderChart()); }).observe($('#chart-host'));
+  }
+
+  async function init() {
+    renderMethod(); renderCases(); renderNotes(); setRange(7); renderMode(); bind();
+    bootCapabilities();
+    const [live] = await Promise.all([detectLive(), loadPrompts()]);
+    state.mode = live ? 'live' : 'cases'; renderMode(); renderAiControls();
+    await loadCase(CASES[0].id);
+  }
+  init();
+})();
+</script>
+</body>
+</html>
